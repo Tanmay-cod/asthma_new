@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.png">
+<title>Asthma Risk Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 20px; }
+  h1 { color: #38bdf8; font-size: 1.4em; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 20px; }
+  .card { background: #1e293b; border-radius: 12px; padding: 18px; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+  .card h3 { margin: 0 0 8px; color: #94a3b8; font-size: 13px; text-transform: uppercase; }
+  .card .val { font-size: 28px; font-weight: bold; }
+  .risk-high { color: #f87171; } .risk-moderate { color: #fbbf24; } .risk-low { color: #4ade80; }
+  #chartWrap { background: #1e293b; border-radius: 12px; padding: 18px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th, td { border-bottom: 1px solid #334155; padding: 8px; text-align: left; }
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    h1 { font-size: 1.2em; }
+    .card .val { font-size: 22px; }
+    table { font-size: 12px; display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<h1>🌬️ Asthma Risk Prediction Dashboard</h1>
+<label>User ID: <input id="uid" value="1" style="width:60px"></label>
+
+<div class="grid" id="cards"></div>
+
+<div id="chartWrap">
+  <h3>SHAP Feature Contributions (why this risk?)</h3>
+  <canvas id="shapChart" height="120"></canvas>
+</div>
+
+<h3>Recent Readings</h3>
+<table><thead><tr><th>Time</th><th>SpO2</th><th>Pulse</th><th>Temp</th><th>Humidity</th><th>Dust</th><th>PEFR</th></tr></thead>
+<tbody id="rows"></tbody></table>
+
+<div id="chartWrap" style="margin-top:20px">
+  <h3>Risk Score Trend</h3>
+  <canvas id="trendChart" height="120"></canvas>
+</div>
+
+<div class="card" style="margin-top:20px">
+  <h3>Manual PEFR Entry</h3>
+  <input id="pefrInput" type="number" placeholder="PEFR (L/min)" style="padding:8px;border-radius:8px;border:none;width:140px">
+  <button onclick="submitPefr()" style="padding:8px 16px;border-radius:8px;border:none;background:#38bdf8;color:#0f172a;font-weight:bold;cursor:pointer">Submit</button>
+  <span id="pefrMsg" style="margin-left:10px"></span>
+</div>
+
+<script>
+let chart, trendChart;
+async function submitPefr() {
+  const uid = document.getElementById('uid').value;
+  const v = parseFloat(document.getElementById('pefrInput').value);
+  if (!v) { document.getElementById('pefrMsg').textContent = 'Enter a valid PEFR'; return; }
+  try {
+    const readings = await (await fetch(`/api/readings/${uid}?limit=1`)).json();
+    if (!readings.length) { document.getElementById('pefrMsg').textContent = 'No sensor reading yet'; return; }
+    const r = readings[0];
+    const payload = { user_id: +uid, spo2: r.spo2, pulse: r.pulse, temperature: r.temperature,
+                      humidity: r.humidity, dust: r.dust, pefr: v };
+    const resp = await fetch('/api/ingest', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    document.getElementById('pefrMsg').textContent = resp.ok ? '✅ PEFR saved, risk updated' : '❌ Error';
+    refresh();
+  } catch (e) { document.getElementById('pefrMsg').textContent = '❌ Error'; }
+}
+async function refresh() {
+  const uid = document.getElementById('uid').value;
+  try {
+    const [predR, readR, trendR] = await Promise.all([
+      fetch(`/api/prediction/${uid}`), fetch(`/api/readings/${uid}?limit=10`), fetch(`/api/predictions/${uid}`)
+    ]);
+    if (trendR.ok) {
+      const t = await trendR.json();
+      if (trendChart) trendChart.destroy();
+      trendChart = new Chart(document.getElementById('trendChart'), {
+        type: 'line',
+        data: { labels: t.map(p => p.created_at.slice(11,19)),
+          datasets: [{ label: 'Risk score', data: t.map(p => p.risk_score), borderColor: '#f87171', tension: 0.3, fill: false }] },
+        options: { scales: { y: { min: 0, max: 100 } } }
+      });
+    }
+    if (predR.ok) {
+      const p = await predR.json();
+      const cls = p.risk_level === 'High' ? 'risk-high' : p.risk_level === 'Moderate' ? 'risk-moderate' : 'risk-low';
+      document.getElementById('cards').innerHTML = `
+        <div class="card"><h3>Risk Score</h3><div class="val ${cls}">${p.risk_score}</div></div>
+        <div class="card"><h3>Risk Level</h3><div class="val ${cls}">${p.risk_level}</div></div>
+        <div class="card"><h3>SpO2</h3><div class="val">${p.features.spo2}%</div></div>
+        <div class="card"><h3>Pulse</h3><div class="val">${p.features.pulse} bpm</div></div>
+        <div class="card"><h3>Dust</h3><div class="val">${p.features.dust} mg/m³</div></div>
+        <div class="card"><h3>PEFR % best</h3><div class="val">${p.features.pefr_pct_best}%</div></div>`;
+      const labels = Object.keys(p.shap_values);
+      const data = Object.values(p.shap_values);
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById('shapChart'), {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'SHAP value (impact on risk)', data,
+          backgroundColor: data.map(v => v > 0 ? '#f87171' : '#4ade80') }] },
+        options: { indexAxis: 'y', scales: { x: { title: { display: true, text: '→ increases risk' } } } }
+      });
+    }
+    if (readR.ok) {
+      const rows = await readR.json();
+      document.getElementById('rows').innerHTML = rows.map(r =>
+        `<tr><td>${r.timestamp}</td><td>${r.spo2}</td><td>${r.pulse}</td><td>${r.temperature}</td><td>${r.humidity}</td><td>${r.dust}</td><td>${r.pefr ?? '-'}</td></tr>`).join('');
+    }
+  } catch (e) { console.log(e); }
+}
+setInterval(refresh, 5000); refresh();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+</script>
+</body>
+</html>

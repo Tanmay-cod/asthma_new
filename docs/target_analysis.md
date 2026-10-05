@@ -20,6 +20,19 @@ documentation (`aamos00_anonym_data_documentation.docx`) — **not assumed**.
 Daily symptom prevalence in data: `daily_day_symp` TRUE 77.1%,
 `daily_night_symp` TRUE 20.5% — highly prevalent; "any symptom" is not a useful rare-event target.
 
+## Phase 4 update (confirmed by original documentation)
+
+- `weekly_hospital` / `weekly_er` / `weekly_doc` encode events as `0 = No`,
+  `-1..-7 = days ago`; they are timing fields, not counts.
+- `weekly_oral` is ordinal 1–4 (1 = No) — earlier "99.7%" note refers to
+  numeric coding; nearly all entries are "No".
+- `weekly_hospital` n=6 weeks (2 participants), `weekly_er` n=7 (3
+  participants) → unusable as supervised targets. `weekly_doc` n=43 weeks
+  (9 participants) → possible weak proxy only.
+- Meaning of these fields is confirmed by the study documentation, but their
+  use as *exacerbation outcomes* still requires clinical validation.
+- See `docs/aamos00_target_validation.md` for the full validated analysis.
+
 ## Recommendation (pending clinical validation)
 
 **Best candidate target:** PEF deterioration (sustained drop of PEF below a

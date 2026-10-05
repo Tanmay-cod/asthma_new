@@ -1,3 +1,18 @@
+## Phase 4 update — candidate horizons (descriptive, not validated)
+
+From `docs/pef_target_analysis.csv` (expanding-max baseline, daily best PEF,
+16 PEF users):
+
+- H = 1 day: ~1083 opportunities; event rates vary widely by threshold/persistence.
+- H = 3 days: ~1053 opportunities.
+- H = 7 days: ~1001 opportunities; aligns with weekly recall window.
+- H = 14 days: ~916 opportunities.
+
+No horizon is clinically validated yet. All remain `candidate — requires
+clinical validation`. See `docs/aamos00_target_validation.md` §7.
+
+---
+
 # Prediction Window Design
 
 Goal: given measurements available **today**, estimate near-term risk.

@@ -27,3 +27,6 @@ models/*.pkl
 # OS
 .DS_Store
 Thumbs.db
+artifacts/
+*.parquet
+

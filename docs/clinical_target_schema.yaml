@@ -1,0 +1,22 @@
+status: pending
+
+target:
+  type: null
+  threshold_pct: null
+  consecutive_days: null
+  baseline_method: null
+  prediction_horizon_days: null
+
+symptoms:
+  included: null
+
+reliever_use:
+  included: null
+
+clinical_outcome:
+  type: null
+
+validation:
+  reviewer_role: null
+  approval_date: null
+  notes: null

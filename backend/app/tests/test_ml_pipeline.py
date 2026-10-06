@@ -87,6 +87,7 @@ def test10_target_config_changeable():
 
 
 from app.ml.labels import candidate_configs, validate_config, BASELINE_METHODS
+from app.ml.clinical_gate import training_allowed, SCHEMA_PATH, load_schema
 
 
 def test1_grid_has_72():
@@ -152,3 +153,34 @@ def test10_baseline_comparison_leakage_safe():
     p = pathlib.Path(__file__).parents[3] / "artifacts" / "aamos00" / "baseline_sensitivity.csv"
     df = __import__('pandas').read_csv(p)
     assert set(df.baseline_method) <= set(BASELINE_METHODS)
+
+
+def test_schema_defaults_pending():
+    s = load_schema()
+    assert s["status"] == "pending"
+    assert s["target"]["threshold_pct"] is None
+
+
+def test_training_blocked_while_pending():
+    s = load_schema()
+    assert training_allowed(s) is False
+
+
+def test_cannot_self_approve_without_values():
+    s = load_schema()
+    s["status"] = "approved"  # config alone must not unlock training
+    assert training_allowed(s) is False
+
+
+def test_invalid_threshold_still_rejected():
+    import pytest
+    with pytest.raises(ValueError):
+        validate_config({"threshold_pct": 150, "consecutive_days": 1, "prediction_horizon_days": 1})
+
+
+def test_deployment_restrictions_enforced():
+    from app.ml import leakage
+    import pytest
+    for col in ["spo2", "dust_indicator", "pm2_5", "aqi"]:
+        with pytest.raises(AssertionError):
+            leakage.assert_no_forbidden_features([col])

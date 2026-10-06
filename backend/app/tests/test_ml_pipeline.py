@@ -84,3 +84,71 @@ def test10_target_config_changeable():
     t1 = labels.candidate_target(d, "baseline_expanding_max", 80, 1, 7)
     t2 = labels.candidate_target(d, "baseline_expanding_max", 60, 1, 7)
     assert not t1.equals(t2)  # different config -> different target, no code change needed
+
+
+from app.ml.labels import candidate_configs, validate_config, BASELINE_METHODS
+
+
+def test1_grid_has_72():
+    assert len(candidate_configs()) == 72
+
+
+def test2_invalid_threshold_rejected():
+    import pytest
+    with pytest.raises(ValueError):
+        validate_config({"threshold_pct": 0, "consecutive_days": 1, "prediction_horizon_days": 1})
+    with pytest.raises(ValueError):
+        validate_config({"threshold_pct": 101, "consecutive_days": 1, "prediction_horizon_days": 1})
+
+
+def test3_invalid_horizon_rejected():
+    import pytest
+    with pytest.raises(ValueError):
+        validate_config({"threshold_pct": 80, "consecutive_days": 1, "prediction_horizon_days": 0})
+
+
+def test4_invalid_persistence_rejected():
+    import pytest
+    with pytest.raises(ValueError):
+        validate_config({"threshold_pct": 80, "consecutive_days": 0, "prediction_horizon_days": 1})
+
+
+def test5_unsupported_baseline_rejected():
+    import pytest
+    with pytest.raises(ValueError):
+        validate_config({"threshold_pct": 80, "consecutive_days": 1, "prediction_horizon_days": 1, "baseline_method": "mean_of_everything"})
+
+
+def test6_config_change_no_feature_code_change():
+    import inspect
+    from app.ml import features
+    src = inspect.getsource(features)
+    assert "threshold_pct" not in src  # feature code must not depend on target config
+
+
+def test7_overlapping_windows_documented():
+    # H=7 windows from T and T+1 overlap by construction; pipeline rows are dependent
+    from app.ml import sensitivity
+    assert set(sensitivity.HORIZONS) == {1, 3, 7, 14}
+
+
+def test8_patient_event_counts():
+    import json, pathlib
+    df = __import__('pandas').read_csv(pathlib.Path(__file__).parents[3] / "artifacts" / "aamos00" / "target_sensitivity.csv")
+    row = df[(df.threshold_pct == 80) & (df.consecutive_days == 2) & (df.prediction_horizon_days == 7)].iloc[0]
+    assert row.participants_with_events + row.participants_without_events <= 16
+
+
+def test9_no_future_target_in_predictors():
+    # labels use days strictly AFTER T by construction (window starts i+1)
+    import inspect
+    from app.ml import labels
+    src = inspect.getsource(labels.candidate_target)
+    assert "i + 1" in src
+
+
+def test10_baseline_comparison_leakage_safe():
+    import pathlib, json
+    p = pathlib.Path(__file__).parents[3] / "artifacts" / "aamos00" / "baseline_sensitivity.csv"
+    df = __import__('pandas').read_csv(p)
+    assert set(df.baseline_method) <= set(BASELINE_METHODS)

@@ -32,6 +32,20 @@ def candidate_target(daily_pef: pd.DataFrame, baseline_col: str,
     return targets
 
 
+BASELINE_METHODS = {"expanding_max", "pef_best", "rolling_median"}
+
+
+def validate_config(cfg: dict) -> None:
+    if not (0 < cfg["threshold_pct"] <= 100):
+        raise ValueError("threshold_pct must be in (0, 100]")
+    if cfg["consecutive_days"] < 1:
+        raise ValueError("consecutive_days must be >= 1")
+    if cfg["prediction_horizon_days"] < 1:
+        raise ValueError("prediction_horizon_days must be >= 1")
+    if cfg.get("baseline_method", "expanding_max") not in BASELINE_METHODS:
+        raise ValueError(f"unsupported baseline_method; use one of {BASELINE_METHODS}")
+
+
 def candidate_configs() -> list[dict]:
     return [
         {"threshold_pct": t, "consecutive_days": n, "prediction_horizon_days": h, "baseline_method": "expanding_max"}

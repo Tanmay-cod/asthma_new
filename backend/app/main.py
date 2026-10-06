@@ -12,3 +12,5 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"],
 app.include_router(v1_router.router)
 for r in (auth.router, profile.router, devices.router, iot.router, measurements.router):
     app.include_router(r, prefix="/api/v1")
+from app.api.v1 import predictions
+app.include_router(predictions.router, prefix="/api/v1")

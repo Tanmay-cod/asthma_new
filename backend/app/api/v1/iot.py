@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models import Device, DeviceStatus, SensorReading, SensorType, DataQuality, DataQualityEvent
+from app.models import Device, DeviceStatus, SensorReading, SensorType, DataQuality, DataQualityEvent, MeasurementSession, SessionStatus
 from app.schemas import IoTReadingPayload
 from app.security.auth import get_current_device
 
@@ -34,11 +34,18 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
     if payload.device_id != device.device_code:
         raise HTTPException(403, "Device identity mismatch")
 
+    session = (db.query(MeasurementSession)
+               .filter(MeasurementSession.device_id == device.id,
+                       MeasurementSession.status == SessionStatus.ACTIVE).first())
+    if not session:
+        raise HTTPException(409, "No active measurement session for this device; reading not assigned to any user")
+    owner_user_id = session.user_id
+
     ts = payload.timestamp or datetime.utcnow()
     if ts.tzinfo is not None:
         ts = ts.replace(tzinfo=None)
     if ts > datetime.utcnow() + timedelta(minutes=5):
-        db.add(DataQualityEvent(user_id=device.user_id, device_id=device.id,
+        db.add(DataQualityEvent(user_id=owner_user_id, device_id=device.id,
                                 event_type="FUTURE_TIMESTAMP", detail=str(ts)))
         db.commit()
         raise HTTPException(422, "Timestamp is in the future; reading rejected")
@@ -50,11 +57,11 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
         lo, hi = RANGES[field]
         quality = DataQuality.VALID if lo <= value <= hi else DataQuality.INVALID
         if quality != DataQuality.VALID:
-            db.add(DataQualityEvent(user_id=device.user_id, device_id=device.id,
+            db.add(DataQualityEvent(user_id=owner_user_id, device_id=device.id,
                                     event_type="INVALID_RANGE", detail=f"{field}={value}"))
             rejected.append(field)
             # Store but flag invalid — never silently modify
-        db.add(SensorReading(user_id=device.user_id, device_id=device.id,
+        db.add(SensorReading(user_id=owner_user_id, device_id=device.id, session_id=session.id,
                              sensor_type=sensor_enum, value=value, unit=UNITS[field],
                              source="esp8266", data_quality=quality,
                              firmware_version=payload.firmware_version, timestamp=ts))

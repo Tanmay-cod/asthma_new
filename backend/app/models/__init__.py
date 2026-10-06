@@ -90,6 +90,23 @@ class Consent(Base):
     granted_at = Column(DateTime, default=datetime.utcnow)
 
 
+class SessionStatus(str, enum.Enum):
+    ACTIVE = "ACTIVE"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class MeasurementSession(Base):
+    __tablename__ = "measurement_sessions"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    device_id = Column(Integer, ForeignKey("devices.id"), index=True)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    ended_at = Column(DateTime, nullable=True)
+    status = Column(Enum(SessionStatus), default=SessionStatus.ACTIVE)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class DeviceStatus(str, enum.Enum):
     ONLINE = "ONLINE"
     OFFLINE = "OFFLINE"
@@ -145,6 +162,7 @@ class SensorReading(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     device_id = Column(Integer, ForeignKey("devices.id"), index=True)
+    session_id = Column(Integer, ForeignKey("measurement_sessions.id"), nullable=True, index=True)
     sensor_type = Column(Enum(SensorType), nullable=False)
     value = Column(Float, nullable=False)
     unit = Column(String, nullable=False)

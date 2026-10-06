@@ -9,6 +9,11 @@ from app.models import User, Device, DeviceCredential
 from app.security.auth import get_current_user, hash_device_token
 
 Base.metadata.create_all(bind=engine)
+_db = SessionLocal()
+from app.models import MeasurementSession as _MS
+_db.query(_MS).delete()
+_db.commit()
+_db.close()
 client = TestClient(app)
 
 
@@ -27,15 +32,20 @@ def _register_device(user, code):
     r = client.post("/api/v1/devices", json={"device_code": code})
     assert r.status_code == 200, r.text
     app.dependency_overrides.pop(get_current_user)
-    return r.json()["device_token"]
+    return r.json()["device_token"], r.json()["device_id"]
 
 
 def test_esp_ingest_user_isolation_and_timestamp():
     u1 = _mk_user(f"e2e_a_{datetime.now().timestamp()}@test"); u2 = _mk_user(f"e2e_b_{datetime.now().timestamp()}@test")
     code_a = f"ASTHMA-ESP8266-A-{datetime.now().timestamp()}"
     code_b = f"ASTHMA-ESP8266-B-{datetime.now().timestamp()}"
-    tok1 = _register_device(u1, code_a)
-    tok2 = _register_device(u2, code_b)
+    tok1, did_a = _register_device(u1, code_a)
+    tok2, did_b = _register_device(u2, code_b)
+    # start a session for user A on device A
+    app.dependency_overrides[get_current_user] = lambda: u1
+    r = client.post("/api/v1/measurement-sessions/start", json={"device_id": did_a})
+    assert r.status_code == 200, r.text
+    app.dependency_overrides.pop(get_current_user)
 
     # User A's device posts
     r = client.post("/api/v1/iot/readings",

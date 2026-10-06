@@ -155,20 +155,29 @@ def test10_baseline_comparison_leakage_safe():
     assert set(df.baseline_method) <= set(BASELINE_METHODS)
 
 
-def test_schema_defaults_pending():
+def test_schema_status_is_research_approved():
     s = load_schema()
-    assert s["status"] == "pending"
-    assert s["target"]["threshold_pct"] is None
+    assert s["status"] == "RESEARCH_APPROVED_PENDING_CLINICAL_REVIEW"
+    assert s["target"]["threshold_pct"] == 80
+    assert s["target"]["consecutive_days"] == 2
+    assert s["target"]["prediction_horizon_days"] == 7
+    assert s["target"]["baseline_method"] == "pef_best"
 
 
 def test_training_blocked_while_pending():
     s = load_schema()
+    s["status"] = "pending"
     assert training_allowed(s) is False
+
+
+def test_training_allowed_with_research_approval():
+    s = load_schema()
+    assert training_allowed(s) is True
 
 
 def test_cannot_self_approve_without_values():
     s = load_schema()
-    s["status"] = "approved"  # config alone must not unlock training
+    s["target"]["threshold_pct"] = None  # missing clinical value must block
     assert training_allowed(s) is False
 
 

@@ -1,20 +1,20 @@
-status: pending
+status: "RESEARCH_APPROVED_PENDING_CLINICAL_REVIEW"
 
 target:
-  type: null
-  threshold_pct: null
-  consecutive_days: null
-  baseline_method: null
-  prediction_horizon_days: null
+  type: "pef_deterioration"
+  threshold_pct: 80
+  consecutive_days: 2
+  baseline_method: "pef_best"
+  prediction_horizon_days: 7
 
 symptoms:
-  included: null
+  included: true
 
 reliever_use:
-  included: null
+  included: true
 
 clinical_outcome:
-  type: null
+  type: "pef_deterioration"
 
 validation:
   reviewer_role: null

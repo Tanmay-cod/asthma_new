@@ -11,9 +11,12 @@ def load_schema(path: Path | None = None) -> dict:
     return yaml.safe_load((path or SCHEMA_PATH).read_text(encoding="utf-8"))
 
 
+ALLOWED_DEV_STATUSES = {"approved", "RESEARCH_APPROVED_PENDING_CLINICAL_REVIEW"}
+
+
 def training_allowed(schema: dict) -> bool:
-    """True only if status is approved AND all clinical fields are filled AND valid."""
-    if schema.get("status") != "approved":
+    """True only if status permits development training AND all clinical fields are filled AND valid."""
+    if schema.get("status") not in ALLOWED_DEV_STATUSES:
         return False
     t = schema.get("target", {})
     if not all(t.get(k) is not None for k in REQUIRED_KEYS):

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -35,6 +35,13 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
         raise HTTPException(403, "Device identity mismatch")
 
     ts = payload.timestamp or datetime.utcnow()
+    if ts.tzinfo is not None:
+        ts = ts.replace(tzinfo=None)
+    if ts > datetime.utcnow() + timedelta(minutes=5):
+        db.add(DataQualityEvent(user_id=device.user_id, device_id=device.id,
+                                event_type="FUTURE_TIMESTAMP", detail=str(ts)))
+        db.commit()
+        raise HTTPException(422, "Timestamp is in the future; reading rejected")
     stored, rejected = 0, []
     for field, sensor_enum in SENSOR_ENUM.items():
         value = getattr(payload, field)

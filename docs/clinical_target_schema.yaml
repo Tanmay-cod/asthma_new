@@ -1,4 +1,5 @@
-status: "RESEARCH_APPROVED_PENDING_CLINICAL_REVIEW"
+status: pending
+clinical_validation_status: "PENDING"
 
 target:
   type: "pef_deterioration"

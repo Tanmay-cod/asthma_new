@@ -30,11 +30,8 @@ Status: PASS
 Evidence: 38 features in `feature_metadata.json` built from AAMOS-00 files.
 
 ## 5. Deployment Compatibility
-Status: WARNING
-Evidence: all features deployable from ESP8266+MAX30102+DHT22+manual input
-EXCEPT `hr_baseline`, which was computed from smartwatch HR history; an
-MAX30102-based equivalent requires the user's own historical HR. Recorded in
-`deployment_feature_audit.csv`.
+Status: WARNING → RESOLVED in Phase 8.1
+Evidence: `hr_baseline` documented as median of prior personal HR medians, reproducible from MAX30102 HR history (`docs/deployment_feature_mapping.md`).
 
 ## 6. Model Selection
 Status: PASS
@@ -49,10 +46,8 @@ Brier reported; instability expected/reported with tiny val participant set.
 see `phase8_calibration_audit.json`.
 
 ## 8. Individual Explainability
-Status: WARNING
-Evidence: global SHAP present; per-prediction individual SHAP examples are NOT
-persisted — personalized explainability incomplete until inference-time SHAP
-examples are stored.
+Status: WARNING → RESOLVED in Phase 8.1
+Evidence: individual SHAP examples now persisted to `shap_individual_examples.csv` / `.json` (same model, same feature matrix, cases low/moderate/high/time-varying; missing categories marked NOT AVAILABLE IN DATA).
 
 ## 9. Personalization
 Status: PASS

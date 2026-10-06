@@ -18,7 +18,11 @@ See `artifacts/aamos00/shap_global_importance.csv` (mean |SHAP| per feature).
 
 ## Individual cases
 
-Representative low/moderate/high and time-varying cases are produced at
-inference time from the same TreeExplainer; the frontend concept in
-`docs/phase8_personalized_ml.md` shows the contract. No SHAP value is
-fabricated.
+Persisted per Phase 8.1 in:
+
+- `artifacts/aamos00/shap_individual_examples.csv`
+- `artifacts/aamos00/shap_individual_examples.json`
+
+Cases: low-risk, moderate-risk, high-risk, and a time-varying participant where
+present. Missing categories are recorded as `NOT AVAILABLE IN DATA`; no
+explanations are fabricated.

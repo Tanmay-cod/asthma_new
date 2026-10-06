@@ -15,6 +15,6 @@ Selection is not by ROC-AUC alone — see `docs/model_selection.md`.
 
 ## Limitations
 
-- Only 15 participants in the pipeline; test partition is small.
+- Only 15 participants in the pipeline; test partition is small (3 participants, ~13 positive rows) → high uncertainty.
 - Overlapping target windows make row-level estimates optimistic.
 - No external validation; development model only.

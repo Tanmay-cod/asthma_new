@@ -127,6 +127,56 @@ def main():
     (ART / "calibration_metrics.json").write_text(json.dumps({k: v["metrics_calibrated"]["brier"] for k, v in results.items()}, indent=2))
     pd.DataFrame(part).to_csv(ART / "participant_level_metrics.csv", index=False)
     global_imp.rename("mean_abs_shap").to_csv(ART / "shap_global_importance.csv")
+
+    # ---- Individual SHAP examples (persisted, reproducible) ----
+    risk_levels = pd.cut(df_te["proba"], bins=[-0.01, 0.33, 0.66, 1.01],
+                         labels=["low", "moderate", "high"])
+    df_te["risk_level"] = risk_levels
+    examples = {}
+    for level in ["low", "moderate", "high"]:
+        sub = df_te[df_te.risk_level == level]
+        examples[level] = sub.iloc[0] if len(sub) else None
+    # Case 4: participant with largest risk change over time (if available)
+    changes = df_te.groupby("user_key")["proba"].agg(lambda s: s.max() - s.min())
+    if len(changes) and changes.max() > 0.1:
+        examples["time_varying"] = df_te[df_te.user_key == changes.idxmax()].sort_values("date").iloc[0]
+
+    rows_csv, rows_json = [], []
+    for case, row in examples.items():
+        if row is None:
+            rows_json.append({"case": case, "status": "NOT AVAILABLE IN DATA"})
+            continue
+        idx = row.name
+        sv_row = sv[list(Xte.index).index(idx)] if idx in Xte.index else None
+        if sv_row is None:
+            continue
+        shap_df = pd.DataFrame({"feature": Xte.columns, "shap": sv_row,
+                                "value": Xte.loc[idx].values})
+        shap_df = shap_df.reindex(shap_df.shap.abs().sort_values(ascending=False).index)
+        top = shap_df.head(10)
+        for rank, (_, r) in enumerate(top.iterrows(), 1):
+            rows_csv.append({
+                "participant_id": int(row.user_key), "prediction_date": int(row.date),
+                "risk_probability": round(float(row.proba), 4), "risk_level": str(row.risk_level),
+                "feature": r.feature, "feature_value": round(float(r.value), 4) if np.isfinite(r.value) else None,
+                "shap_value": round(float(r.shap), 6),
+                "direction": "increases_risk" if r.shap > 0 else "decreases_risk",
+                "rank": rank, "case": case,
+            })
+        top_risk = top[top.shap > 0].head(5)
+        top_prot = top[top.shap < 0].head(5)
+        rows_json.append({
+            "participant_id": int(row.user_key), "prediction_date": int(row.date),
+            "risk_probability": round(float(row.proba), 4), "risk_level": str(row.risk_level),
+            "case": case,
+            "top_risk_factors": [{"feature": r.feature, "value": round(float(r.value), 4) if np.isfinite(r.value) else None,
+                                  "shap_value": round(float(r.shap), 6), "direction": "increases_risk"} for _, r in top_risk.iterrows()],
+            "top_protective_factors": [{"feature": r.feature, "value": round(float(r.value), 4) if np.isfinite(r.value) else None,
+                                        "shap_value": round(float(r.shap), 6), "direction": "decreases_risk"} for _, r in top_prot.iterrows()],
+        })
+    pd.DataFrame(rows_csv).to_csv(ART / "shap_individual_examples.csv", index=False)
+    (ART / "shap_individual_examples.json").write_text(json.dumps(rows_json, indent=2))
+    print("Individual SHAP examples persisted:", len(rows_csv), "rows,", len(rows_json), "cases")
     (ART / "final_dataset_summary.json").write_text(json.dumps({
         "participants": int(df.user_key.nunique()), "rows": int(len(df)), "features": len(X.columns),
         "target": TARGET_CFG, "clinical_validation_status": "NOT_VALIDATED",

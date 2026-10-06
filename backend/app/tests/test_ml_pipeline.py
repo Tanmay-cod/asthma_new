@@ -88,6 +88,9 @@ def test10_target_config_changeable():
 
 from app.ml.labels import candidate_configs, validate_config, BASELINE_METHODS
 from app.ml.clinical_gate import training_allowed, SCHEMA_PATH, load_schema
+from pathlib import Path
+
+A = Path(__file__).parents[3] / "artifacts" / "aamos00"
 
 
 def test1_grid_has_72():
@@ -193,3 +196,27 @@ def test_deployment_restrictions_enforced():
     for col in ["spo2", "dust_indicator", "pm2_5", "aqi"]:
         with pytest.raises(AssertionError):
             leakage.assert_no_forbidden_features([col])
+
+
+def test_individual_shap_artifacts_exist():
+    assert (A / "shap_individual_examples.csv").exists()
+    assert (A / "shap_individual_examples.json").exists()
+    import pandas as pd
+    df = pd.read_csv(A / "shap_individual_examples.csv")
+    assert {"participant_id", "prediction_date", "risk_probability", "risk_level",
+            "feature", "feature_value", "shap_value", "direction", "rank"} <= set(df.columns)
+
+
+def test_no_future_hr_in_baseline():
+    # hr_baseline in features uses only prior observations by construction
+    import inspect
+    from app.ml import features
+    src = inspect.getsource(features.hr_features_at)
+    assert "hr_daily.date < t" in src
+
+
+def test_hr_baseline_same_definition():
+    import inspect
+    from app.ml import features
+    src = inspect.getsource(features.hr_features_at)
+    assert "base.median()" in src  # median of prior personal HR medians

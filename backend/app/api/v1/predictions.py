@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models import User, RiskPrediction, PredictionExplanation, PredictionFeature
+from app.models import Prediction
 from app.security.auth import get_current_user
 from app.services import inference
 
@@ -13,44 +13,42 @@ router = APIRouter(tags=["predictions"])
 
 
 @router.post("/predictions")
-def create_prediction(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_prediction(user=Depends(get_current_user), db: Session = Depends(get_db)):
     return inference.predict_for_user(db, user)
 
 
 @router.get("/predictions/latest")
-def latest_prediction(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    p = (db.query(RiskPrediction).filter(RiskPrediction.user_id == user.id)
-         .order_by(RiskPrediction.timestamp.desc()).first())
+def latest_prediction(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    p = (db.query(Prediction).filter(Prediction.user_id == user.id)
+         .order_by(Prediction.prediction_time.desc()).first())
     if not p:
         raise HTTPException(404, "No prediction yet")
-    return {"prediction_id": p.id, "probability": p.probability, "risk_category": p.risk_category,
-            "prediction_window": p.prediction_window, "timestamp": p.timestamp}
+    return {"prediction_id": p.id, "risk_score": p.risk_score, "risk_level": p.risk_level,
+            "model_version": p.model_version, "prediction_time": p.prediction_time}
 
 
 @router.get("/predictions/history")
-def prediction_history(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    preds = (db.query(RiskPrediction).filter(RiskPrediction.user_id == user.id)
-             .order_by(RiskPrediction.timestamp.desc()).limit(50).all())
-    return [{"prediction_id": p.id, "probability": p.probability, "risk_category": p.risk_category,
-             "prediction_window": p.prediction_window, "timestamp": p.timestamp} for p in preds]
+def prediction_history(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    preds = (db.query(Prediction).filter(Prediction.user_id == user.id)
+             .order_by(Prediction.prediction_time.desc()).limit(50).all())
+    return [{"prediction_id": p.id, "risk_score": p.risk_score, "risk_level": p.risk_level,
+             "model_version": p.model_version, "prediction_time": p.prediction_time} for p in preds]
 
 
 @router.get("/predictions/{prediction_id}/explanation")
-def explanation(prediction_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    p = db.query(RiskPrediction).filter(RiskPrediction.id == prediction_id, RiskPrediction.user_id == user.id).first()
+def explanation(prediction_id: str, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    p = db.query(Prediction).filter(Prediction.id == prediction_id, Prediction.user_id == user.id).first()
     if not p:
         raise HTTPException(404, "Not found")
-    expls = db.query(PredictionExplanation).filter(PredictionExplanation.prediction_id == p.id).all()
-    feats = db.query(PredictionFeature).filter(PredictionFeature.prediction_id == p.id).all()
-    return {"prediction_id": p.id, "probability": p.probability, "risk_category": p.risk_category,
-            "explanations": [{"feature": e.feature_name, "contribution": e.contribution} for e in expls],
-            "features": [{"feature": f.feature_name, "value": f.feature_value} for f in feats]}
+    return {"prediction_id": p.id, "risk_score": p.risk_score, "risk_level": p.risk_level,
+            "model_version": p.model_version, "prediction_time": p.prediction_time,
+            "explanation": p.explanation, "data_quality": p.data_quality}
 
 
 @router.post("/reports/personalized")
-def generate_report(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def generate_report(user=Depends(get_current_user), db: Session = Depends(get_db)):
     pred = inference.predict_for_user(db, user)
-    if pred.get("risk") is None and pred.get("risk_probability") is None:
+    if pred.get("risk_probability") is None:
         return pred
     feats = inference.build_features_for_user(db, user)
     report = {
@@ -85,5 +83,5 @@ def generate_report(user: User = Depends(get_current_user), db: Session = Depend
 
 
 @router.get("/reports")
-def list_reports(user: User = Depends(get_current_user)):
+def list_reports(user=Depends(get_current_user)):
     return {"status": "report history is derived from predictions", "hint": "use /predictions/history"}

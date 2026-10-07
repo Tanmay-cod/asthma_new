@@ -5,16 +5,17 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models import SensorReading, SensorType, PefrReading, SymptomAssessment, User
+from app.models import SensorReading, MeasurementSession, PefrReading, SymptomAssessment, PersonalBaseline
 from app.security.auth import get_current_user
 
 router = APIRouter(tags=["measurements"])
 
 
 @router.get("/readings/latest")
-def latest_readings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def latest_readings(user=Depends(get_current_user), db: Session = Depends(get_db)):
     r = (db.query(SensorReading)
-         .filter(SensorReading.user_id == user.id)
+         .join(MeasurementSession, SensorReading.session_id == MeasurementSession.id)
+         .filter(MeasurementSession.user_id == user.id)
          .order_by(SensorReading.recorded_at.desc()).first())
     if not r:
         return {}
@@ -35,20 +36,22 @@ class PefrCreate(BaseModel):
 
 
 @router.post("/pefr")
-def add_pefr(payload: PefrCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def add_pefr(payload: PefrCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
     if not (50 <= payload.pefr <= 800):
         raise HTTPException(422, "PEFR value outside plausible range (50-800 L/min)")
-    row = PefrReading(user_id=user.id, pefr=payload.pefr, unit=payload.unit,
-                      notes=payload.notes, timestamp=payload.timestamp or datetime.utcnow())
+    row = PefrReading(id=str(__import__('uuid').uuid4()), user_id=user.id,
+                      pef_l_min=payload.pefr,
+                      recorded_at=payload.timestamp or datetime.utcnow(), source="manual")
     db.add(row); db.commit(); db.refresh(row)
-    return {"id": row.id, "pefr": row.pefr, "timestamp": row.timestamp}
+    return {"id": row.id, "pef_l_min": row.pef_l_min, "recorded_at": row.recorded_at}
 
 
 @router.get("/pefr")
-def list_pefr(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_pefr(user=Depends(get_current_user), db: Session = Depends(get_db)):
     rows = (db.query(PefrReading).filter(PefrReading.user_id == user.id)
-            .order_by(PefrReading.timestamp.desc()).limit(50).all())
-    return [{"id": r.id, "pefr": r.pefr, "unit": r.unit, "timestamp": r.timestamp} for r in rows]
+            .order_by(PefrReading.recorded_at.desc()).limit(50).all())
+    return [{"id": r.id, "pef_l_min": r.pef_l_min, "personal_best_l_min": r.personal_best_l_min,
+             "recorded_at": r.recorded_at} for r in rows]
 
 
 class SymptomCreate(BaseModel):
@@ -62,14 +65,14 @@ class SymptomCreate(BaseModel):
 
 
 @router.post("/symptoms")
-def add_symptoms(payload: SymptomCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def add_symptoms(payload: SymptomCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
     row = SymptomAssessment(user_id=user.id, **payload.model_dump())
     db.add(row); db.commit(); db.refresh(row)
     return {"id": row.id, "timestamp": row.timestamp}
 
 
 @router.get("/symptoms")
-def list_symptoms(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_symptoms(user=Depends(get_current_user), db: Session = Depends(get_db)):
     rows = (db.query(SymptomAssessment).filter(SymptomAssessment.user_id == user.id)
             .order_by(SymptomAssessment.timestamp.desc()).limit(50).all())
     return [{"id": r.id, "cough": r.cough, "wheezing": r.wheezing,
@@ -78,7 +81,7 @@ def list_symptoms(user: User = Depends(get_current_user), db: Session = Depends(
 
 
 @router.get("/baseline")
-def get_baselines(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_baselines(user=Depends(get_current_user), db: Session = Depends(get_db)):
     from app.models import PersonalBaseline
     rows = db.query(PersonalBaseline).filter(PersonalBaseline.user_id == user.id).all()
     if not rows:

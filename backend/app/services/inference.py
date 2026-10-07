@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from app.models import (SensorReading, SensorType, PefrReading, SymptomAssessment,
-                        User, RiskPrediction, PredictionFeature, PredictionExplanation)
+from app.models import (SensorReading, PefrReading, SymptomAssessment,
+                        MeasurementSession, Prediction)
 
 ROOT = Path(__file__).resolve().parents[3]
 MODEL_PATH = ROOT / "models" / "phase8_xgboost.pkl"
@@ -42,14 +42,17 @@ def get_model_input_features() -> list[str]:
     raise RuntimeError("cannot determine model feature order")
 
 
-def data_quality_state(db: Session, user_id: int) -> dict:
+def data_quality_state(db: Session, user_id: str) -> dict:
     latest_pefr = (db.query(PefrReading).filter(PefrReading.user_id == user_id)
-                   .order_by(PefrReading.timestamp.desc()).first())
-    hr = (db.query(SensorReading).filter(SensorReading.user_id == user_id)
+                   .order_by(PefrReading.recorded_at.desc()).first())
+    from app.models import MeasurementSession
+    hr = (db.query(SensorReading)
+          .join(MeasurementSession, SensorReading.session_id == MeasurementSession.id)
+          .filter(MeasurementSession.user_id == user_id)
           .order_by(SensorReading.recorded_at.desc()).first())
     state = {"pefr": "GOOD_DATA" if latest_pefr else "SENSOR_UNAVAILABLE",
              "hr": "GOOD_DATA" if hr else "SENSOR_UNAVAILABLE"}
-    if latest_pefr and (datetime.utcnow() - latest_pefr.timestamp).total_seconds() > 86400 * 7:
+    if latest_pefr and (datetime.utcnow() - latest_pefr.recorded_at.replace(tzinfo=None)).total_seconds() > 86400 * 7:
         state["pefr"] = "STALE_DATA"
     if not latest_pefr and not hr:
         state["overall"] = "INSUFFICIENT_DATA"
@@ -58,12 +61,15 @@ def data_quality_state(db: Session, user_id: int) -> dict:
     return state
 
 
-def build_features_for_user(db: Session, user: User) -> dict:
+def build_features_for_user(db: Session, user) -> dict:
     """Approximate deployment-compatible feature vector from stored user data.
     Missing history yields explicit NaN/null — no fabricated values."""
     pefrs = (db.query(PefrReading).filter(PefrReading.user_id == user.id)
-             .order_by(PefrReading.timestamp.desc()).limit(14).all())
-    hrs = (db.query(SensorReading).filter(SensorReading.user_id == user.id)
+             .order_by(PefrReading.recorded_at.desc()).limit(14).all())
+    from app.models import MeasurementSession
+    hrs = (db.query(SensorReading)
+           .join(MeasurementSession, SensorReading.session_id == MeasurementSession.id)
+           .filter(MeasurementSession.user_id == user.id)
            .order_by(SensorReading.recorded_at.desc()).limit(100).all())
     temps = hrs
     hums = hrs
@@ -73,14 +79,15 @@ def build_features_for_user(db: Session, user: User) -> dict:
     def vals(rows, attr):
         return [getattr(r, attr) for r in rows if getattr(r, attr, None) is not None]
 
-    pef_vals = vals(pefrs, "pefr")
+    pef_vals = vals(pefrs, "pef_l_min")
     hr_vals = vals(hrs, "heart_rate")
     temp_vals = vals(temps, "temperature_c")
     hum_vals = vals(hums, "humidity_percent")
 
     personal_best = max(pef_vals) if pef_vals else None
-    if user.profile and user.profile.baseline_pefr:
-        personal_best = user.profile.baseline_pefr
+    pb_vals = [p.personal_best_l_min for p in pefrs if p.personal_best_l_min]
+    if pb_vals:
+        personal_best = max(pb_vals)
 
     def pct_of_best():
         if pef_vals and personal_best:
@@ -103,7 +110,7 @@ def build_features_for_user(db: Session, user: User) -> dict:
         "humidity_mean_7d": float(np.mean(hum_vals)) if hum_vals else np.nan,
         "symptoms_recent": [{"timestamp": s.timestamp.isoformat(), "cough": s.cough,
                               "wheezing": s.wheezing} for s in syms],
-        "recent_pef": [p.pefr for p in pefrs],
+        "recent_pef": [p.pef_l_min for p in pefrs],
     }
 
 
@@ -115,7 +122,7 @@ def risk_level(p: float) -> str:
     return "high"
 
 
-def predict_for_user(db: Session, user: User) -> dict:
+def predict_for_user(db: Session, user) -> dict:
     quality = data_quality_state(db, user.id)
     feats = build_features_for_user(db, user)
     if quality["overall"] == "INSUFFICIENT_DATA" or feats["current_pef"] is None:
@@ -153,20 +160,16 @@ def predict_for_user(db: Session, user: User) -> dict:
     except Exception:
         top_inc, top_dec = [], []
 
-    pred = RiskPrediction(user_id=user.id, model_version_id=None, probability=proba,
-                          risk_category=risk_level(proba), prediction_window="7 days")
-    # attach model version info (best-effort; model_versions table may be empty)
-    db.add(pred); db.flush()
-    for item in top_inc + top_dec:
-        db.add(PredictionExplanation(prediction_id=pred.id, feature_name=item["feature"],
-                                     contribution=item["shap_value"], explanation_version="1.0.0"))
-    for k, v in mapping.items():
-        if v is not None and not (isinstance(v, float) and np.isnan(v)):
-            db.add(PredictionFeature(prediction_id=pred.id, feature_name=k, feature_value=float(v)))
-    db.commit(); db.refresh(pred)
+    import uuid
+    pred = Prediction(id=str(uuid.uuid4()), user_id=user.id,
+                      risk_score=round(proba, 4), risk_level=risk_level(proba),
+                      model_version=MODEL_VERSION,
+                      data_quality=feats.get("data_quality", quality["overall"]),
+                      explanation={"top_increasing": top_inc, "top_decreasing": top_dec})
+    db.add(pred); db.commit(); db.refresh(pred)
 
     return {
-        "user_id": user.id, "prediction_id": pred.id, "prediction_timestamp": pred.timestamp.isoformat(),
+        "user_id": user.id, "prediction_id": pred.id, "prediction_timestamp": pred.prediction_time.isoformat(),
         "model_version": MODEL_VERSION, "prediction_horizon_days": 7,
         "risk_probability": round(proba, 4), "risk_level": risk_level(proba),
         "target": "pef_deterioration", "target_definition": TARGET_DEFINITION,

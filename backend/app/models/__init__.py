@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (Column, Integer, Float, String, DateTime, ForeignKey,
-                        Text, Boolean, Enum, Index)
+                        Text, Boolean, Enum, Index, JSON)
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -22,28 +22,14 @@ class User(Base):
     role = Column(Enum(Role), default=Role.PATIENT, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    profile = relationship("Profile", back_populates="user", uselist=False)
-
 
 class Profile(Base):
+    """Maps the existing Supabase `profiles` table (live schema)."""
     __tablename__ = "profiles"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
-    full_name = Column(String)
-    date_of_birth = Column(DateTime, nullable=True)
-    sex = Column(String, nullable=True)
-    height_cm = Column(Float, nullable=True)
-    weight_kg = Column(Float, nullable=True)
-    asthma_diagnosis_status = Column(String, nullable=True)  # CONFIRMED / SUSPECTED / UNKNOWN
-    previous_exacerbations = Column(Integer, nullable=True)
-    hospitalizations = Column(Integer, nullable=True)
-    emergency_visits = Column(Integer, nullable=True)
-    smoking_exposure = Column(String, nullable=True)
-    preferred_units = Column(String, default="metric")
-    baseline_pefr = Column(Float, nullable=True)  # user-reported personal best, L/min
+    id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))  # uuid as string
+    full_name = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-
-    user = relationship("User", back_populates="profile")
 
 
 class MedicalHistory(Base):
@@ -97,12 +83,12 @@ class SessionStatus(str, enum.Enum):
 
 class MeasurementSession(Base):
     __tablename__ = "measurement_sessions"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))  # uuid
+    user_id = Column(String, nullable=False, index=True)
     device_id = Column(String, ForeignKey("devices.id"), index=True)
     started_at = Column(DateTime, default=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
-    status = Column(Enum(SessionStatus), default=SessionStatus.ACTIVE)
+    status = Column(String, default="ACTIVE", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -116,7 +102,7 @@ class DeviceStatus(str, enum.Enum):
 class Device(Base):
     """Maps the existing Supabase `devices` table (shared device, no permanent user)."""
     __tablename__ = "devices"
-    id = Column(String, primary_key=True)  # uuid as string
+    id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))  # uuid as string
     device_code = Column(String, unique=True, index=True)
     device_name = Column(String, nullable=True)
     device_token_hash = Column(String, nullable=True)
@@ -124,16 +110,6 @@ class Device(Base):
     last_seen_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-
-
-class DeviceCredential(Base):
-    """Legacy table — device tokens now live in devices.device_token_hash."""
-    __tablename__ = "device_credentials"
-    id = Column(Integer, primary_key=True)
-    device_id = Column(String, ForeignKey("devices.id"), unique=True)
-    token_hash = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    revoked = Column(Boolean, default=False)
 
 
 class SensorType(str, enum.Enum):
@@ -156,33 +132,32 @@ class DataQuality(str, enum.Enum):
 class SensorReading(Base):
     """Maps the Supabase sensor_readings table (wide row per reading)."""
     __tablename__ = "sensor_readings"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    device_id = Column(String, ForeignKey("devices.id"), index=True)
-    session_id = Column(Integer, ForeignKey("measurement_sessions.id"), nullable=True, index=True)
+    id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))  # uuid
+    session_id = Column(String, ForeignKey("measurement_sessions.id"), nullable=True, index=True)
+    device_id = Column(String, ForeignKey("devices.id"), nullable=True, index=True)
     heart_rate = Column(Float, nullable=True)
     spo2 = Column(Float, nullable=True)
-    heart_rate_valid = Column(Boolean, nullable=True)
-    spo2_valid = Column(Boolean, nullable=True)
+    heart_rate_valid = Column(Boolean, nullable=False, default=False)
+    spo2_valid = Column(Boolean, nullable=False, default=False)
     temperature_c = Column(Float, nullable=True)
     humidity_percent = Column(Float, nullable=True)
-    temperature_valid = Column(Boolean, nullable=True)
-    humidity_valid = Column(Boolean, nullable=True)
+    temperature_valid = Column(Boolean, nullable=False, default=False)
+    humidity_valid = Column(Boolean, nullable=False, default=False)
     dust_indicator = Column(Float, nullable=True)
-    dust_valid = Column(Boolean, nullable=True)
-    wifi_rssi = Column(Float, nullable=True)
-    recorded_at = Column(DateTime, nullable=True, index=True)
+    dust_valid = Column(Boolean, nullable=False, default=False)
+    wifi_rssi = Column(Integer, nullable=True)
+    recorded_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class PefrReading(Base):
-    __tablename__ = "pefr_readings"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    pefr = Column(Float, nullable=False)  # L/min
-    unit = Column(String, default="L/min")
-    notes = Column(Text, nullable=True)
-    timestamp = Column(DateTime, nullable=False, index=True)
+    __tablename__ = "pef_readings"
+    id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))  # uuid
+    user_id = Column(String, nullable=False, index=True)
+    pef_l_min = Column(Float, nullable=False)
+    personal_best_l_min = Column(Float, nullable=True)
+    recorded_at = Column(DateTime, nullable=False, index=True)
+    source = Column(String, default="manual")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -236,32 +211,20 @@ class ModelVersion(Base):
     artifact_path = Column(String, nullable=True)
 
 
-class RiskPrediction(Base):
-    __tablename__ = "risk_predictions"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    model_version_id = Column(Integer, ForeignKey("model_versions.id"))
-    probability = Column(Float)
-    risk_category = Column(String)  # LOW / MODERATE / HIGH (configurable cutoffs)
-    prediction_window = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-
-
-class PredictionFeature(Base):
-    __tablename__ = "prediction_features"
-    id = Column(Integer, primary_key=True)
-    prediction_id = Column(Integer, ForeignKey("risk_predictions.id"), index=True)
-    feature_name = Column(String)
-    feature_value = Column(Float)
-
-
-class PredictionExplanation(Base):
-    __tablename__ = "prediction_explanations"
-    id = Column(Integer, primary_key=True)
-    prediction_id = Column(Integer, ForeignKey("risk_predictions.id"), index=True)
-    feature_name = Column(String)
-    contribution = Column(Float)  # SHAP value
-    explanation_version = Column(String, default="1.0.0")
+class Prediction(Base):
+    """Maps the existing Supabase `predictions` table."""
+    __tablename__ = "predictions"
+    id = Column(String, primary_key=True, default=lambda: str(__import__("uuid").uuid4()))  # uuid
+    user_id = Column(String, nullable=False, index=True)
+    pef_reading_id = Column(String, nullable=True)
+    session_id = Column(String, nullable=True)
+    prediction_time = Column(DateTime, nullable=False, default=datetime.utcnow)
+    risk_score = Column(Float, nullable=True)
+    risk_level = Column(String, nullable=True)
+    model_version = Column(String, nullable=True)
+    data_quality = Column(String, nullable=True)
+    explanation = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Recommendation(Base):

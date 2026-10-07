@@ -14,7 +14,7 @@ router = APIRouter(tags=["measurement-sessions"])
 @router.get("/measurement-sessions/current/latest-readings")
 def latest_session_readings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     s = (db.query(MeasurementSession)
-         .filter(MeasurementSession.user_id == user.id, MeasurementSession.status == SessionStatus.ACTIVE)
+         .filter(MeasurementSession.user_id == user.id, MeasurementSession.status == 'ACTIVE')
          .first())
     if not s:
         return {"status": "NO_ACTIVE_SESSION"}
@@ -44,7 +44,7 @@ class StartRequest(BaseModel):
 def start_session(payload: StartRequest | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # prevent duplicate active session for this user
     existing = db.query(MeasurementSession).filter(
-        MeasurementSession.user_id == user.id, MeasurementSession.status == SessionStatus.ACTIVE).first()
+        MeasurementSession.user_id == user.id, MeasurementSession.status == 'ACTIVE').first()
     if existing:
         raise HTTPException(400, "You already have an active measurement session")
 
@@ -55,24 +55,24 @@ def start_session(payload: StartRequest | None = None, user: User = Depends(get_
     if not device:
         raise HTTPException(404, "No device registered")
     active = db.query(MeasurementSession).filter(
-        MeasurementSession.device_id == device.id, MeasurementSession.status == SessionStatus.ACTIVE).first()
+        MeasurementSession.device_id == device.id, MeasurementSession.status == 'ACTIVE').first()
     if active:
         raise HTTPException(409, "Device currently in use; please wait until the current session ends")
 
-    s = MeasurementSession(user_id=user.id, device_id=device.id, status=SessionStatus.ACTIVE)
+    s = MeasurementSession(user_id=user.id, device_id=device.id, status='ACTIVE')
     db.add(s); db.commit(); db.refresh(s)
     return {"session_id": s.id, "user_id": user.id, "device_id": device.id, "status": "ACTIVE", "started_at": s.started_at}
 
 
 @router.post("/measurement-sessions/{session_id}/end")
-def end_session(session_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def end_session(session_id: str, user=Depends(get_current_user), db: Session = Depends(get_db)):
     s = db.query(MeasurementSession).filter(MeasurementSession.id == session_id,
                                             MeasurementSession.user_id == user.id).first()
     if not s:
         raise HTTPException(404, "Session not found or not yours")
-    if s.status != SessionStatus.ACTIVE:
+    if s.status != "ACTIVE":
         raise HTTPException(400, "Session already ended")
-    s.status = SessionStatus.COMPLETED
+    s.status = "COMPLETED"
     s.ended_at = datetime.utcnow()
     db.commit()
     return {"session_id": s.id, "status": "COMPLETED", "ended_at": s.ended_at}
@@ -81,7 +81,7 @@ def end_session(session_id: int, user: User = Depends(get_current_user), db: Ses
 @router.get("/measurement-sessions/current")
 def current_session(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     s = db.query(MeasurementSession).filter(MeasurementSession.user_id == user.id,
-                                            MeasurementSession.status == SessionStatus.ACTIVE).first()
+                                            MeasurementSession.status == 'ACTIVE').first()
     if not s:
         return {"status": "NO_ACTIVE_SESSION"}
     return {"session_id": s.id, "device_id": s.device_id, "status": "ACTIVE", "started_at": s.started_at}
@@ -90,5 +90,5 @@ def current_session(user: User = Depends(get_current_user), db: Session = Depend
 @router.get("/measurement-sessions/history")
 def session_history(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rows = db.query(MeasurementSession).filter(MeasurementSession.user_id == user.id).order_by(MeasurementSession.started_at.desc()).limit(50).all()
-    return [{"session_id": s.id, "device_id": s.device_id, "status": s.status.value,
+    return [{"session_id": s.id, "device_id": s.device_id, "status": s.status,
              "started_at": s.started_at, "ended_at": s.ended_at} for s in rows]

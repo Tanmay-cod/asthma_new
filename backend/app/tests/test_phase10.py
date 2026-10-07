@@ -19,17 +19,21 @@ def _seed():
     db.add_all([u1, u2]); db.commit(); db.refresh(u1); db.refresh(u2)
     # user A data
     for i, v in enumerate([500, 480, 470, 460, 450, 440, 430]):
-        db.add(PefrReading(user_id=u1.id, pefr=v, timestamp=datetime.utcnow() - timedelta(days=i)))
+        db.add(PefrReading(id=str(__import__('uuid').uuid4()), user_id=u1.id, pef_l_min=v, recorded_at=datetime.utcnow() - timedelta(days=i)))
+    from app.models import MeasurementSession
+    _s = MeasurementSession(id=str(__import__('uuid').uuid4()), user_id=str(u1.id), device_id=None, status="ACTIVE")
+    db.add(_s); db.commit()
     for i in range(7):
-        db.add(SensorReading(user_id=u1.id, heart_rate=72 + i, temperature_c=25.0,
+        db.add(SensorReading(id=str(__import__('uuid').uuid4()), session_id=_s.id, heart_rate=72 + i, temperature_c=25.0,
                              humidity_percent=50.0, recorded_at=datetime.utcnow() - timedelta(days=i)))
     db.add(SymptomAssessment(user_id=u1.id, cough=1, wheezing=0))
     # user B: no data
-    db.add(PefrReading(user_id=u2.id, pefr=550, timestamp=datetime.utcnow()))
+    db.add(PefrReading(id=str(__import__('uuid').uuid4()), user_id=u2.id, pef_l_min=550, recorded_at=datetime.utcnow()))
     db.commit()
     from types import SimpleNamespace
-    r1 = SimpleNamespace(id=u1.id, email=u1.email, role=u1.role, profile=None)
-    r2 = SimpleNamespace(id=u2.id, email=u2.email, role=u2.role, profile=None)
+    r1 = SimpleNamespace(id=str(u1.id), email=u1.email, role=u1.role, profile=None)
+    r2 = SimpleNamespace(id=str(u2.id), email=u2.email, role=u2.role, profile=None)
+    # sessions/pefr seeds already use str(u.id)
     db.close()
     return r1, r2
 
@@ -66,4 +70,4 @@ def test_missing_data_no_fabrication():
     u1, u2 = _seed()
     _override(u2)
     r = client.get("/api/v1/predictions/latest")
-    assert r.status_code == 404 or r.json().get("risk_category") is not None
+    assert r.status_code == 404 or r.json().get("risk_level") is not None

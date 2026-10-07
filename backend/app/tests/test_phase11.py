@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.core.database import Base, engine, SessionLocal
-from app.models import User, Device, DeviceCredential
+from app.models import User, Device
 from app.security.auth import get_current_user, hash_device_token
 
 Base.metadata.create_all(bind=engine)

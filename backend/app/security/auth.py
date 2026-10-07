@@ -41,15 +41,9 @@ def get_current_user(
     if not credentials:
         raise HTTPException(401, "Missing Authorization header")
     supabase_user = _verify_supabase_token(credentials.credentials)
+    from types import SimpleNamespace
     supabase_id = supabase_user.get("id")
-    user = db.query(User).filter(User.supabase_id == supabase_id).first()
-    if not user:
-        # Auto-provision local user record on first verified login
-        user = User(supabase_id=supabase_id, email=supabase_user.get("email", ""), role=Role.PATIENT)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
+    return SimpleNamespace(id=supabase_id, email=supabase_user.get("email", ""), role="PATIENT")
 
 
 def hash_device_token(token: str) -> str:

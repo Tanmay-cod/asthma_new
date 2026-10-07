@@ -36,7 +36,7 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
 
     session = (db.query(MeasurementSession)
                .filter(MeasurementSession.device_id == device.id,
-                       MeasurementSession.status == SessionStatus.ACTIVE).first())
+                       MeasurementSession.status == 'ACTIVE').first())
     if not session:
         raise HTTPException(409, "No active measurement session for this device; reading not assigned to any user")
     owner_user_id = session.user_id
@@ -63,7 +63,7 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
             flagged.append(k)
             db.add(DataQualityEvent(user_id=owner_user_id, device_id=device.id,
                                     event_type="INVALID_RANGE", detail=f"{k}={v}"))
-    db.add(SensorReading(user_id=owner_user_id, device_id=device.id, session_id=session.id,
+    db.add(SensorReading(id=str(__import__('uuid').uuid4()), session_id=session.id, device_id=device.id,
                          heart_rate=payload.heart_rate, spo2=payload.spo2,
                          heart_rate_valid=payload.heart_rate_valid, spo2_valid=payload.spo2_valid,
                          temperature_c=payload.temperature_c, humidity_percent=payload.humidity_percent,

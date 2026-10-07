@@ -23,7 +23,6 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     profile = relationship("Profile", back_populates="user", uselist=False)
-    devices = relationship("Device", back_populates="user")
 
 
 class Profile(Base):
@@ -100,7 +99,7 @@ class MeasurementSession(Base):
     __tablename__ = "measurement_sessions"
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    device_id = Column(Integer, ForeignKey("devices.id"), index=True)
+    device_id = Column(String, ForeignKey("devices.id"), index=True)
     started_at = Column(DateTime, default=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
     status = Column(Enum(SessionStatus), default=SessionStatus.ACTIVE)
@@ -115,29 +114,26 @@ class DeviceStatus(str, enum.Enum):
 
 
 class Device(Base):
+    """Maps the existing Supabase `devices` table (shared device, no permanent user)."""
     __tablename__ = "devices"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    device_code = Column(String, unique=True, index=True)  # e.g. ASTHMA-ESP8266-0001
-    name = Column(String, nullable=True)
-    status = Column(Enum(DeviceStatus), default=DeviceStatus.UNREGISTERED)
-    firmware_version = Column(String, nullable=True)
-    last_seen = Column(DateTime, nullable=True)
+    id = Column(String, primary_key=True)  # uuid as string
+    device_code = Column(String, unique=True, index=True)
+    device_name = Column(String, nullable=True)
+    device_token_hash = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    last_seen_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    user = relationship("User", back_populates="devices")
-    credentials = relationship("DeviceCredential", back_populates="device", uselist=False)
+    updated_at = Column(DateTime, default=datetime.utcnow)
 
 
 class DeviceCredential(Base):
+    """Legacy table — device tokens now live in devices.device_token_hash."""
     __tablename__ = "device_credentials"
     id = Column(Integer, primary_key=True)
-    device_id = Column(Integer, ForeignKey("devices.id"), unique=True)
-    token_hash = Column(String, nullable=False)  # store hash, not plaintext
+    device_id = Column(String, ForeignKey("devices.id"), unique=True)
+    token_hash = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     revoked = Column(Boolean, default=False)
-
-    device = relationship("Device", back_populates="credentials")
 
 
 class SensorType(str, enum.Enum):
@@ -162,7 +158,7 @@ class SensorReading(Base):
     __tablename__ = "sensor_readings"
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    device_id = Column(Integer, ForeignKey("devices.id"), index=True)
+    device_id = Column(String, ForeignKey("devices.id"), index=True)
     session_id = Column(Integer, ForeignKey("measurement_sessions.id"), nullable=True, index=True)
     heart_rate = Column(Float, nullable=True)
     spo2 = Column(Float, nullable=True)
@@ -302,7 +298,7 @@ class DataQualityEvent(Base):
     __tablename__ = "data_quality_events"
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    device_id = Column(Integer, ForeignKey("devices.id"), nullable=True)
+    device_id = Column(String, ForeignKey("devices.id"), nullable=True)
     event_type = Column(String)  # INVALID_RANGE / MISSING / STALE / SUSPECT
     detail = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)

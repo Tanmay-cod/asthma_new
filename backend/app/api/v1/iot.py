@@ -70,7 +70,6 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
                          temperature_valid=payload.temperature_valid, humidity_valid=payload.humidity_valid,
                          dust_indicator=payload.dust_indicator, dust_valid=payload.dust_valid,
                          wifi_rssi=payload.wifi_rssi, recorded_at=ts))
-    device.last_seen = datetime.utcnow()
-    device.status = DeviceStatus.ONLINE
+    device.last_seen_at = datetime.utcnow()
     db.commit()
     return {"status": "ok", "stored": 1, "flagged": flagged}

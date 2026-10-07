@@ -37,7 +37,7 @@ def latest_session_readings(user: User = Depends(get_current_user), db: Session 
 
 
 class StartRequest(BaseModel):
-    device_id: int | None = None  # if None, pick first available device
+    device_id: str | None = None  # uuid string in Supabase
 
 
 @router.post("/measurement-sessions/start")

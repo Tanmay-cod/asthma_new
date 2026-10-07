@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Device, DeviceCredential, User, Role
+from app.models import Device, User, Role
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -63,9 +63,9 @@ def get_current_device(
     if not credentials:
         raise HTTPException(401, "Missing device credential")
     token_hash = hash_device_token(credentials.credentials)
-    cred = (db.query(DeviceCredential)
-            .filter(DeviceCredential.token_hash == token_hash, DeviceCredential.revoked == False)
-            .first())
-    if not cred:
+    device = (db.query(Device)
+              .filter(Device.device_token_hash == token_hash, Device.is_active == True)
+              .first())
+    if not device:
         raise HTTPException(403, "Invalid device credential")
-    return cred.device
+    return device

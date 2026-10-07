@@ -20,11 +20,11 @@ def latest_readings(user=Depends(get_current_user), db: Session = Depends(get_db
     if not r:
         return {}
     return {
-        "heart_rate": {"value": r.heart_rate, "unit": "bpm", "timestamp": r.recorded_at},
-        "spo2": {"value": r.spo2, "unit": "%", "timestamp": r.recorded_at},
-        "temperature_c": {"value": r.temperature_c, "unit": "C", "timestamp": r.recorded_at},
-        "humidity_percent": {"value": r.humidity_percent, "unit": "%", "timestamp": r.recorded_at},
-        "dust_indicator": {"value": r.dust_indicator, "unit": "indicator", "timestamp": r.recorded_at},
+        "heart_rate": {"value": r.heart_rate, "unit": "bpm", "timestamp": r.recorded_at, "valid": r.heart_rate_valid},
+        "spo2": {"value": r.spo2, "unit": "%", "timestamp": r.recorded_at, "valid": r.spo2_valid},
+        "temperature_c": {"value": r.temperature_c, "unit": "C", "timestamp": r.recorded_at, "valid": r.temperature_valid},
+        "humidity_percent": {"value": r.humidity_percent, "unit": "%", "timestamp": r.recorded_at, "valid": r.humidity_valid},
+        "dust_indicator": {"value": r.dust_indicator, "unit": "indicator", "timestamp": r.recorded_at, "valid": r.dust_valid},
     }
 
 

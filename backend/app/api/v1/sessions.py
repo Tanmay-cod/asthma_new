@@ -24,15 +24,15 @@ def latest_session_readings(user: User = Depends(get_current_user), db: Session 
     out = {}
     for r in rows:
         if r.heart_rate is not None and "heart_rate" not in out:
-            out["heart_rate"] = {"value": r.heart_rate, "unit": "bpm", "timestamp": r.recorded_at}
+            out["heart_rate"] = {"value": r.heart_rate, "unit": "bpm", "timestamp": r.recorded_at, "valid": r.heart_rate_valid}
         if r.spo2 is not None and "spo2" not in out:
-            out["spo2"] = {"value": r.spo2, "unit": "%", "timestamp": r.recorded_at}
+            out["spo2"] = {"value": r.spo2, "unit": "%", "timestamp": r.recorded_at, "valid": r.spo2_valid}
         if r.temperature_c is not None and "temperature_c" not in out:
-            out["temperature_c"] = {"value": r.temperature_c, "unit": "C", "timestamp": r.recorded_at}
+            out["temperature_c"] = {"value": r.temperature_c, "unit": "C", "timestamp": r.recorded_at, "valid": r.temperature_valid}
         if r.humidity_percent is not None and "humidity_percent" not in out:
-            out["humidity_percent"] = {"value": r.humidity_percent, "unit": "%", "timestamp": r.recorded_at}
+            out["humidity_percent"] = {"value": r.humidity_percent, "unit": "%", "timestamp": r.recorded_at, "valid": r.humidity_valid}
         if r.dust_indicator is not None and "dust_indicator" not in out:
-            out["dust_indicator"] = {"value": r.dust_indicator, "unit": "indicator", "timestamp": r.recorded_at}
+            out["dust_indicator"] = {"value": r.dust_indicator, "unit": "indicator", "timestamp": r.recorded_at, "valid": r.dust_valid}
     return {"session_id": s.id, "status": "ACTIVE", "latest": out}
 
 

@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./env";
+import { API_BASE_URL, API_PREFIX } from "./env";
 import { getAccessToken } from "./authStore";
 
 /** Typed client for the existing FastAPI backend (prefix /api/v1). */
@@ -29,7 +29,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers["Content-Type"] = "application/json";
   }
 
-  let res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  let res = await fetch(`${API_BASE_URL}${API_PREFIX}${path}`, {
+    ...init,
+    headers,
+  });
 
   if (res.status === 401) {
     // Token may have expired between proactive refreshes: force one
@@ -39,7 +42,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       throw new ApiError(401, "Session expired; please sign in again");
     }
-    res = await fetch(`${API_BASE_URL}${path}`, {
+    res = await fetch(`${API_BASE_URL}${API_PREFIX}${path}`, {
       ...init,
       headers: { ...headers, Authorization: `Bearer ${token}` },
     });

@@ -9,6 +9,9 @@ export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 ).replace(/\/+$/, "");
 
+/** Versioned API prefix used by the FastAPI backend. */
+export const API_PREFIX = "/api/v1";
+
 export const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(
   /\/+$/,
   ""

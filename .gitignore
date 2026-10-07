@@ -33,3 +33,6 @@ artifacts/
 
 backend/.esp001_device_token
 
+
+backend/.test_user_token
+

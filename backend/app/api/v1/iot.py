@@ -31,7 +31,9 @@ SENSOR_ENUM = {
 
 @router.post("/iot/readings")
 def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_current_device), db: Session = Depends(get_db)):
-    if payload.device_id != device.device_code:
+    # Device is derived entirely from the authenticated token; device_code/device_id are advisory.
+    supplied = payload.device_id or payload.device_code
+    if supplied is not None and supplied not in (device.device_code, str(device.id)):
         raise HTTPException(403, "Device identity mismatch")
 
     session = (db.query(MeasurementSession)
@@ -41,7 +43,7 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
         raise HTTPException(409, "No active measurement session for this device; reading not assigned to any user")
     owner_user_id = session.user_id
 
-    ts = payload.timestamp or datetime.utcnow()
+    ts = payload.recorded_at or payload.timestamp or datetime.utcnow()
     if ts.tzinfo is not None:
         ts = ts.replace(tzinfo=None)
     if ts > datetime.utcnow() + timedelta(minutes=5):

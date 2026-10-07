@@ -13,15 +13,18 @@ router = APIRouter(tags=["measurements"])
 
 @router.get("/readings/latest")
 def latest_readings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    out = {}
-    for st in SensorType:
-        r = (db.query(SensorReading)
-             .filter(SensorReading.user_id == user.id, SensorReading.sensor_type == st)
-             .order_by(SensorReading.timestamp.desc()).first())
-        if r:
-            out[st.value] = {"value": r.value, "unit": r.unit, "timestamp": r.timestamp,
-                             "data_quality": r.data_quality.value}
-    return out
+    r = (db.query(SensorReading)
+         .filter(SensorReading.user_id == user.id)
+         .order_by(SensorReading.recorded_at.desc()).first())
+    if not r:
+        return {}
+    return {
+        "heart_rate": {"value": r.heart_rate, "unit": "bpm", "timestamp": r.recorded_at},
+        "spo2": {"value": r.spo2, "unit": "%", "timestamp": r.recorded_at},
+        "temperature_c": {"value": r.temperature_c, "unit": "C", "timestamp": r.recorded_at},
+        "humidity_percent": {"value": r.humidity_percent, "unit": "%", "timestamp": r.recorded_at},
+        "dust_indicator": {"value": r.dust_indicator, "unit": "indicator", "timestamp": r.recorded_at},
+    }
 
 
 class PefrCreate(BaseModel):

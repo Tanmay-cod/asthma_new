@@ -158,21 +158,25 @@ class DataQuality(str, enum.Enum):
 
 
 class SensorReading(Base):
+    """Maps the Supabase sensor_readings table (wide row per reading)."""
     __tablename__ = "sensor_readings"
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     device_id = Column(Integer, ForeignKey("devices.id"), index=True)
     session_id = Column(Integer, ForeignKey("measurement_sessions.id"), nullable=True, index=True)
-    sensor_type = Column(Enum(SensorType), nullable=False)
-    value = Column(Float, nullable=False)
-    unit = Column(String, nullable=False)
-    source = Column(String, default="esp8266")
-    data_quality = Column(Enum(DataQuality), default=DataQuality.VALID)
-    firmware_version = Column(String, nullable=True)
-    timestamp = Column(DateTime, nullable=False, index=True)
+    heart_rate = Column(Float, nullable=True)
+    spo2 = Column(Float, nullable=True)
+    heart_rate_valid = Column(Boolean, nullable=True)
+    spo2_valid = Column(Boolean, nullable=True)
+    temperature_c = Column(Float, nullable=True)
+    humidity_percent = Column(Float, nullable=True)
+    temperature_valid = Column(Boolean, nullable=True)
+    humidity_valid = Column(Boolean, nullable=True)
+    dust_indicator = Column(Float, nullable=True)
+    dust_valid = Column(Boolean, nullable=True)
+    wifi_rssi = Column(Float, nullable=True)
+    recorded_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    __table_args__ = (Index("ix_sensor_readings_user_ts", "user_id", "timestamp"),)
 
 
 class PefrReading(Base):

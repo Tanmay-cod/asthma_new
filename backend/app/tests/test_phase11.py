@@ -50,9 +50,9 @@ def test_esp_ingest_user_isolation_and_timestamp():
     # User A's device posts
     r = client.post("/api/v1/iot/readings",
                     headers={"Authorization": f"Bearer {tok1}"},
-                    json={"device_id": code_a, "heart_rate": 75,
-                          "temperature": 26.0, "humidity": 50, "dust_value": 0.05})
-    assert r.status_code == 200 and r.json()["stored"] == 4, r.text
+                    json={"device_id": code_a, "heart_rate": 75, "spo2": 98,
+                          "temperature_c": 26.0, "humidity_percent": 50, "dust_indicator": 0.05})
+    assert r.status_code == 200 and r.json()["stored"] == 1, r.text
 
     # Device B token cannot pose as A
     r = client.post("/api/v1/iot/readings",

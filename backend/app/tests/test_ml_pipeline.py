@@ -197,6 +197,15 @@ def test_invalid_threshold_still_rejected():
         validate_config({"threshold_pct": 150, "consecutive_days": 1, "prediction_horizon_days": 1})
 
 
+def test_supabase_config_placeholders_exist():
+    from app.core.config import Settings
+    s = Settings()
+    assert hasattr(s, "SUPABASE_URL")
+    assert hasattr(s, "SUPABASE_ANON_KEY")
+    assert hasattr(s, "SUPABASE_SERVICE_ROLE_KEY")
+    assert isinstance(s.DATABASE_URL, str)
+
+
 def test_deployment_restrictions_enforced():
     from app.ml import leakage
     import pytest

@@ -45,9 +45,8 @@ def get_model_input_features() -> list[str]:
 def data_quality_state(db: Session, user_id: int) -> dict:
     latest_pefr = (db.query(PefrReading).filter(PefrReading.user_id == user_id)
                    .order_by(PefrReading.timestamp.desc()).first())
-    hr = (db.query(SensorReading).filter(SensorReading.user_id == user_id,
-                                         SensorReading.sensor_type == SensorType.HEART_RATE)
-          .order_by(SensorReading.timestamp.desc()).first())
+    hr = (db.query(SensorReading).filter(SensorReading.user_id == user_id)
+          .order_by(SensorReading.recorded_at.desc()).first())
     state = {"pefr": "GOOD_DATA" if latest_pefr else "SENSOR_UNAVAILABLE",
              "hr": "GOOD_DATA" if hr else "SENSOR_UNAVAILABLE"}
     if latest_pefr and (datetime.utcnow() - latest_pefr.timestamp).total_seconds() > 86400 * 7:
@@ -64,25 +63,20 @@ def build_features_for_user(db: Session, user: User) -> dict:
     Missing history yields explicit NaN/null — no fabricated values."""
     pefrs = (db.query(PefrReading).filter(PefrReading.user_id == user.id)
              .order_by(PefrReading.timestamp.desc()).limit(14).all())
-    hrs = (db.query(SensorReading).filter(SensorReading.user_id == user.id,
-                                          SensorReading.sensor_type == SensorType.HEART_RATE)
-           .order_by(SensorReading.timestamp.desc()).limit(100).all())
-    temps = (db.query(SensorReading).filter(SensorReading.user_id == user.id,
-                                            SensorReading.sensor_type == SensorType.TEMPERATURE)
-             .order_by(SensorReading.timestamp.desc()).limit(14).all())
-    hums = (db.query(SensorReading).filter(SensorReading.user_id == user.id,
-                                           SensorReading.sensor_type == SensorType.HUMIDITY)
-            .order_by(SensorReading.timestamp.desc()).limit(14).all())
+    hrs = (db.query(SensorReading).filter(SensorReading.user_id == user.id)
+           .order_by(SensorReading.recorded_at.desc()).limit(100).all())
+    temps = hrs
+    hums = hrs
     syms = (db.query(SymptomAssessment).filter(SymptomAssessment.user_id == user.id)
             .order_by(SymptomAssessment.timestamp.desc()).limit(7).all())
 
     def vals(rows, attr):
-        return [getattr(r, attr) for r in rows if getattr(r, attr) is not None]
+        return [getattr(r, attr) for r in rows if getattr(r, attr, None) is not None]
 
     pef_vals = vals(pefrs, "pefr")
-    hr_vals = vals(hrs, "value")
-    temp_vals = vals(temps, "value")
-    hum_vals = vals(hums, "value")
+    hr_vals = vals(hrs, "heart_rate")
+    temp_vals = vals(temps, "temperature_c")
+    hum_vals = vals(hums, "humidity_percent")
 
     personal_best = max(pef_vals) if pef_vals else None
     if user.profile and user.profile.baseline_pefr:

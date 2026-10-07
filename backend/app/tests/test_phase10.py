@@ -21,10 +21,8 @@ def _seed():
     for i, v in enumerate([500, 480, 470, 460, 450, 440, 430]):
         db.add(PefrReading(user_id=u1.id, pefr=v, timestamp=datetime.utcnow() - timedelta(days=i)))
     for i in range(7):
-        db.add(SensorReading(user_id=u1.id, device_id=None, sensor_type=SensorType.HEART_RATE,
-                             value=72 + i, unit="bpm", timestamp=datetime.utcnow() - timedelta(days=i)))
-        db.add(SensorReading(user_id=u1.id, device_id=None, sensor_type=SensorType.TEMPERATURE,
-                             value=25.0, unit="C", timestamp=datetime.utcnow() - timedelta(days=i)))
+        db.add(SensorReading(user_id=u1.id, heart_rate=72 + i, temperature_c=25.0,
+                             humidity_percent=50.0, recorded_at=datetime.utcnow() - timedelta(days=i)))
     db.add(SymptomAssessment(user_id=u1.id, cough=1, wheezing=0))
     # user B: no data
     db.add(PefrReading(user_id=u2.id, pefr=550, timestamp=datetime.utcnow()))

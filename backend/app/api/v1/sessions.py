@@ -20,12 +20,19 @@ def latest_session_readings(user: User = Depends(get_current_user), db: Session 
         return {"status": "NO_ACTIVE_SESSION"}
     rows = (db.query(SensorReading)
             .filter(SensorReading.session_id == s.id)
-            .order_by(SensorReading.timestamp.desc()).limit(20).all())
+            .order_by(SensorReading.recorded_at.desc()).limit(20).all())
     out = {}
     for r in rows:
-        if r.sensor_type.value not in out:
-            out[r.sensor_type.value] = {"value": r.value, "unit": r.unit, "timestamp": r.timestamp,
-                                        "data_quality": r.data_quality.value}
+        if r.heart_rate is not None and "heart_rate" not in out:
+            out["heart_rate"] = {"value": r.heart_rate, "unit": "bpm", "timestamp": r.recorded_at}
+        if r.spo2 is not None and "spo2" not in out:
+            out["spo2"] = {"value": r.spo2, "unit": "%", "timestamp": r.recorded_at}
+        if r.temperature_c is not None and "temperature_c" not in out:
+            out["temperature_c"] = {"value": r.temperature_c, "unit": "C", "timestamp": r.recorded_at}
+        if r.humidity_percent is not None and "humidity_percent" not in out:
+            out["humidity_percent"] = {"value": r.humidity_percent, "unit": "%", "timestamp": r.recorded_at}
+        if r.dust_indicator is not None and "dust_indicator" not in out:
+            out["dust_indicator"] = {"value": r.dust_indicator, "unit": "indicator", "timestamp": r.recorded_at}
     return {"session_id": s.id, "status": "ACTIVE", "latest": out}
 
 

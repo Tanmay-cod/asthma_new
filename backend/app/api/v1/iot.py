@@ -49,25 +49,28 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
                                 event_type="FUTURE_TIMESTAMP", detail=str(ts)))
         db.commit()
         raise HTTPException(422, "Timestamp is in the future; reading rejected")
-    stored, rejected = 0, []
-    for field, sensor_enum in SENSOR_ENUM.items():
-        value = getattr(payload, field)
-        if value is None:
-            continue
-        lo, hi = RANGES[field]
-        quality = DataQuality.VALID if lo <= value <= hi else DataQuality.INVALID
-        if quality != DataQuality.VALID:
-            db.add(DataQualityEvent(user_id=owner_user_id, device_id=device.id,
-                                    event_type="INVALID_RANGE", detail=f"{field}={value}"))
-            rejected.append(field)
-            # Store but flag invalid — never silently modify
-        db.add(SensorReading(user_id=owner_user_id, device_id=device.id, session_id=session.id,
-                             sensor_type=sensor_enum, value=value, unit=UNITS[field],
-                             source="esp8266", data_quality=quality,
-                             firmware_version=payload.firmware_version, timestamp=ts))
-        stored += 1
 
+    expected = {
+        "heart_rate": payload.heart_rate, "spo2": payload.spo2,
+        "temperature_c": payload.temperature_c, "humidity_percent": payload.humidity_percent,
+        "dust_indicator": payload.dust_indicator,
+    }
+    flagged = []
+    ranges = {"heart_rate": (20, 250), "spo2": (50, 100), "temperature_c": (-20, 60),
+              "humidity_percent": (0, 100), "dust_indicator": (0, 10)}
+    for k, v in expected.items():
+        if v is not None and not (ranges[k][0] <= v <= ranges[k][1]):
+            flagged.append(k)
+            db.add(DataQualityEvent(user_id=owner_user_id, device_id=device.id,
+                                    event_type="INVALID_RANGE", detail=f"{k}={v}"))
+    db.add(SensorReading(user_id=owner_user_id, device_id=device.id, session_id=session.id,
+                         heart_rate=payload.heart_rate, spo2=payload.spo2,
+                         heart_rate_valid=payload.heart_rate_valid, spo2_valid=payload.spo2_valid,
+                         temperature_c=payload.temperature_c, humidity_percent=payload.humidity_percent,
+                         temperature_valid=payload.temperature_valid, humidity_valid=payload.humidity_valid,
+                         dust_indicator=payload.dust_indicator, dust_valid=payload.dust_valid,
+                         wifi_rssi=payload.wifi_rssi, recorded_at=ts))
     device.last_seen = datetime.utcnow()
     device.status = DeviceStatus.ONLINE
     db.commit()
-    return {"status": "ok", "stored": stored, "flagged": rejected}
+    return {"status": "ok", "stored": 1, "flagged": flagged}

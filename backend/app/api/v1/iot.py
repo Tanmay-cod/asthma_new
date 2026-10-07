@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models import Device, DeviceStatus, SensorReading, SensorType, DataQuality, DataQualityEvent, MeasurementSession, SessionStatus
+from app.models import Device, DeviceStatus, SensorReading, SensorType, DataQuality, MeasurementSession
 from app.schemas import IoTReadingPayload
 from app.security.auth import get_current_device
 
@@ -45,9 +45,6 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
     if ts.tzinfo is not None:
         ts = ts.replace(tzinfo=None)
     if ts > datetime.utcnow() + timedelta(minutes=5):
-        db.add(DataQualityEvent(user_id=owner_user_id, device_id=device.id,
-                                event_type="FUTURE_TIMESTAMP", detail=str(ts)))
-        db.commit()
         raise HTTPException(422, "Timestamp is in the future; reading rejected")
 
     expected = {
@@ -61,8 +58,8 @@ def submit_readings(payload: IoTReadingPayload, device: Device = Depends(get_cur
     for k, v in expected.items():
         if v is not None and not (ranges[k][0] <= v <= ranges[k][1]):
             flagged.append(k)
-            db.add(DataQualityEvent(user_id=owner_user_id, device_id=device.id,
-                                    event_type="INVALID_RANGE", detail=f"{k}={v}"))
+            # DataQualityEvent table is not present in the live Supabase schema;
+            # validation is reported via the response 'flagged' list instead.
     db.add(SensorReading(id=str(__import__('uuid').uuid4()), session_id=session.id, device_id=device.id,
                          heart_rate=payload.heart_rate, spo2=payload.spo2,
                          heart_rate_valid=payload.heart_rate_valid, spo2_valid=payload.spo2_valid,

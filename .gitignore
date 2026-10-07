@@ -30,3 +30,6 @@ Thumbs.db
 artifacts/
 *.parquet
 
+
+backend/.esp001_device_token
+

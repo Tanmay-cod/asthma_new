@@ -123,7 +123,8 @@ void loop() {
 
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    http.begin(SERVER_URL);
+    WiFiClient client;
+    http.begin(client, SERVER_URL);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("Authorization", String("Bearer ") + DEVICE_TOKEN);
     int code = http.POST(body);
